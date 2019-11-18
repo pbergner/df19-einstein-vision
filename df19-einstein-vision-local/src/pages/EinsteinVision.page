@@ -1,0 +1,209 @@
+<apex:page showHeader="true" sidebar="false" controller="Ctl_EinsteinVision">
+<html xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<head>
+	<title>Einstein Vision Demo</title>
+	<apex:slds />
+	<style>
+	.upload-file-container {
+		padding: 20px;
+	}
+	.result-container {
+		padding: 20px;
+	}
+	.upload-file-container #analyze-btn {
+		margin-top: 10px;
+	}
+	.slds-card {
+		margin: 15px;
+	}
+	.result-wrapper {
+		padding: 20px;
+		min-height: 138px;
+	}
+
+	/* progress bar */
+	.progress {
+	    display: -ms-flexbox;
+	    display: flex;
+	    height: 40px;
+	    overflow: hidden;
+	    font-size: .75rem;
+	    background-color: #e9ecef;
+	    border-radius: .25rem;
+	}
+	.progress-bar {
+	    display: -ms-flexbox;
+	    display: flex;
+	    -ms-flex-direction: column;
+	    flex-direction: column;
+	    -ms-flex-pack: center;
+	    justify-content: center;
+	    color: #fff;
+	    text-align: center;
+	    white-space: nowrap;
+	    background-color: #007bff;
+	    transition: width .6s ease;
+	}
+	.progress {
+	  margin-bottom: 10px;
+	}
+
+	.progress-bar {
+	  width: 0;
+	}
+	</style>
+	<script src="https://code.jquery.com/jquery-2.2.4.min.js"/>
+	<script>
+	var uploadImageVFR = '{!JSENCODE($RemoteAction.Ctl_EinsteinVision.uploadImage)}';
+
+	// setup path
+	var pathName = window.location.pathname;
+	var sfEnv = {};
+    if (pathName.indexOf('apex') > -1) {
+        sfEnv.pathStart = 'apex/';
+    } else {
+        let noLeadingSlash = pathName.slice(1);
+        sfEnv.pathStart = noLeadingSlash.slice(0,noLeadingSlash.indexOf('/') + 1);
+    }
+    sfEnv.pathStart = '';
+
+	$(document).ready(function() {
+		$('#image-upload').on('change',function(){
+			$('#image-upload-name').text(this.files[0].name);
+		});
+
+		$('#analyze-btn').on('click',function()  {
+			showEinsteinLoader();
+			var reader = new FileReader();
+			var file = $('#image-upload')[0].files[0];
+			reader.readAsDataURL(file);
+
+			reader.onload = function () {
+				var imageName = $('#image-upload-name').text();
+				var startOfData = reader.result.indexOf(',') + 1;
+				var fileData = reader.result.slice(startOfData);
+            	uploadFile(imageName,fileData);
+			};
+		});
+	});
+
+	function uploadFile(imageName,base64Image) {
+		Visualforce.remoting.Manager.invokeAction(	
+			uploadImageVFR,
+			imageName,
+			base64Image,
+			function(result, event) {
+				// if there was an error
+				if (event.type=='exception') {				
+					alert(result);
+					console.log('error result:' + result);
+				}
+				// if there was no error continue
+				else {
+					// wait for image to be available on content server, then display it
+					console.log('result.probability : ' + result.probability);
+					var probAsNumber = result.probability.slice(0,-1);
+					setTimeout(function() {
+						$('.result-container').html(`
+							<div class="slds-text-heading_medium">Classification: ${result.label}</div>
+							<div class="progress">
+					     		<div class="progress-bar" role="progressbar" aria-valuenow="${probAsNumber}" aria-valuemin="0" aria-valuemax="100">${result.probability}</div>
+					    	</div>
+							<img src="${sfEnv.pathStart}/sfc/servlet.shepherd/version/renditionDownload?rendition=THUMB720BY480&versionId=${result.sfId}" width="300px"/>
+
+							
+						`);
+						animateProgressBar();
+					},1500);
+				}
+			}
+		);
+	}
+
+	function animateProgressBar() {
+		var delay = 500;
+		$('.progress-bar').each(function(i){
+		    $(this).delay( delay*i ).animate( { width: $(this).attr('aria-valuenow') + '%' }, delay );
+
+		    $(this).prop('Counter',0).animate({
+		        Counter: $(this).text()
+		    }, {
+		        duration: delay,
+		        easing: 'swing',
+		        step: function (now) {
+		            $(this).text(Math.ceil(now)+'%');
+		        }
+		    });
+		});
+	}
+
+	function showEinsteinLoader() {
+		$('.einstein-loader').show();
+	}
+	</script>
+</head>
+<body>
+	<div class="slds-scope">
+		<!-- PAGE HEADER -->
+		<div class="slds-page-header">
+			<div class="slds-media">
+				<div class="slds-media__figure">
+					<span class="slds-icon_container slds-icon-standard-avatar">
+						<img src="/file-asset/astro_al_with_Einstein_Logo_left_fa" width="40px" height="40px"/>
+					</span>
+				</div>
+				<div class="slds-media__body">
+					<h1 class="slds-page-header__title slds-truncate slds-align-middle">Upload an Image for Einstein Vision Analysis</h1>
+				</div>
+			</div>
+		</div>
+		<div class="slds-grid slds-gutters">
+			<!-- LEFT SIDE -->
+			<div class="slds-col">
+				<article class="slds-card">
+					<div class="slds-form-element">
+						<div class="slds-form-element__control">
+							<div class="upload-file-container">
+								<input type="file" class="slds-file-selector__input slds-assistive-text" accept="image/png,image/jpeg" id="image-upload"/>
+								<label class="slds-file-selector__body" for="image-upload">
+									<div class="slds-text-heading_medium">Select an image</div>
+									<div class="file-upload">
+										<span class="slds-file-selector__button slds-button slds-button_neutral">
+											<svg class="slds-button__icon slds-button__icon_left" aria-hidden="true">
+												<use xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="{!URLFOR($Asset.SLDS, '/assets/icons/utility-sprite/svg/symbols.svg#upload')}" />
+											</svg>
+											Upload
+										</span>
+										<span id="image-upload-name"><!-- JS adds uploaded image name--></span>
+									</div>
+									<div>
+										<button type="button" id="analyze-btn" class="slds-button slds-button_brand">Send to Einstein</button>
+									</div>
+								</label>
+							</div>
+						</div>
+					</div>
+				</article>
+			</div>
+			<!-- RIGHT SIDE -->
+			<div class="slds-col">
+				<article class="slds-card">
+					<div class="result-wrapper">
+						 
+						<div class="slds-text-heading_medium">Einstein Vision Result</div>
+						<div class="result-container">
+							<div class="einstein-loader slds-hide">
+	                            <img src="{!$Resource.einstein_animation}" width="200px"/>
+	                        </div>
+							<!-- JS will add image result -->
+						</div>
+					</div>
+				</article>
+			</div>
+		</div>
+	</div>
+</body>
+</html>
+</apex:page>
+
+
